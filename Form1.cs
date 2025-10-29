@@ -33,7 +33,14 @@ namespace mcserv
             this.button6.Click += ButtonStartCF_Click; // Start CF tunnel
             this.button7.Click += ButtonStopCF_Click; // Stop CF tunnel
             this.button8.Click += ButtonConsoleSend_Click; // Console send
+            this.button9.Click += ButtonDownloadCF_Click; // Console send
+
             this.listBox1.SelectedIndexChanged += ListBox1_SelectedIndexChanged;
+        }
+
+        private void ButtonDownloadCF_Click(object sender, EventArgs e)
+        {
+            System.Diagnostics.Process.Start("https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/#latest-release");
         }
 
         private async void Form1_Load(object sender, EventArgs e)
@@ -97,7 +104,25 @@ namespace mcserv
             // Find server name for this output (if known)
             var si = serverManager.Servers.FirstOrDefault(s => s.Id == e.ServerId);
             var prefix = si != null ? $"[{si.Name}] " : string.Empty;
-            richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+            // Route cloudflared output to richTextBox2 (separate console)
+            if (e.Line != null && e.Line.StartsWith("[cloudflared]", StringComparison.OrdinalIgnoreCase))
+            {
+                if (richTextBox2 != null)
+                    richTextBox2.AppendText(prefix + e.Line + Environment.NewLine);
+                else
+                    richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+            }
+            else if (e.Line != null && e.Line.StartsWith("<cloudflared", StringComparison.OrdinalIgnoreCase))
+            {
+                if (richTextBox2 != null)
+                    richTextBox2.AppendText(prefix + e.Line + Environment.NewLine);
+                else
+                    richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+            }
+            else
+            {
+                richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+            }
         }
 
         private async void ButtonCreate_Click(object sender, EventArgs e)
@@ -186,11 +211,18 @@ namespace mcserv
 
         private void ButtonStartCF_Click(object sender, EventArgs e)
         {
-            // Placeholder: start Cloudflare tunnel for selected server (requires external cloudflared)
             int idx = listBox1.SelectedIndex;
             if (idx < 0) return;
             var si = serverManager.Servers[idx];
-            MessageBox.Show($"Start CF tunnel stub for '{si.Name}'. Configure 'cloudflared' separately.");
+            try
+            {
+                // start cloudflared tunnel; run in background
+                _ = serverManager.StartCloudflareTunnelAsync(si.Name);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to start cloudflared: " + ex.Message);
+            }
         }
 
         private void ButtonStopCF_Click(object sender, EventArgs e)
@@ -198,7 +230,14 @@ namespace mcserv
             int idx = listBox1.SelectedIndex;
             if (idx < 0) return;
             var si = serverManager.Servers[idx];
-            MessageBox.Show($"Stop CF tunnel stub for '{si.Name}'.");
+            try
+            {
+                _ = serverManager.StopCloudflareTunnelAsync(si.Name);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to stop cloudflared: " + ex.Message);
+            }
         }
 
         private void ButtonConsoleSend_Click(object sender, EventArgs e)
@@ -210,6 +249,11 @@ namespace mcserv
             if (string.IsNullOrEmpty(cmd)) return;
             serverManager.SendCommand(si.Name, cmd);
             textBox2.Clear();
+        }
+
+        private void exitToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            Environment.Exit(0);
         }
     }
 }

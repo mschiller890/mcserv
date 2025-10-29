@@ -259,6 +259,111 @@ namespace mcserv
             await StartServerAsync(name);
         }
 
+        /// <summary>
+        /// Start a cloudflared tunnel for the named server using the server's TunnelCommand (or a sensible default).
+        /// Captures stdout/stderr and emits ServerOutput events.
+        /// </summary>
+        public async Task StartCloudflareTunnelAsync(string name)
+        {
+            var si = Servers.FirstOrDefault(s => s.Name == name);
+            if (si == null) throw new InvalidOperationException("Server not found");
+
+            if (si.IsTunnelRunning)
+            {
+                OnOutput(si, "<cloudflared already running>");
+                return;
+            }
+
+            // Default tunnel command: expose TCP port 25565 of the server folder
+            var cmd = si.TunnelCommand;
+            if (string.IsNullOrWhiteSpace(cmd))
+            {
+                // use tcp tunnel to localhost:25565 (common for Minecraft)
+                cmd = "cloudflared tunnel --url tcp://localhost:25565";
+            }
+
+            // split executable and args simply
+            var parts = SplitCommand(cmd);
+            var exe = parts.Item1;
+            var args = parts.Item2;
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = exe,
+                Arguments = args,
+                WorkingDirectory = si.FolderPath,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            try
+            {
+                var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
+                p.OutputDataReceived += (s, e) => { if (e.Data != null) OnOutput(si, "[cloudflared] " + e.Data); };
+                p.ErrorDataReceived += (s, e) => { if (e.Data != null) OnOutput(si, "[cloudflared] " + e.Data); };
+                p.Exited += (s, e) => { si.IsTunnelRunning = false; OnOutput(si, "<cloudflared exited>"); };
+
+                if (!p.Start()) throw new InvalidOperationException("Failed to start cloudflared process");
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+
+                si.CloudflaredProcess = p;
+                si.IsTunnelRunning = true;
+                OnOutput(si, $"<cloudflared started: {cmd}>");
+            }
+            catch (Exception ex)
+            {
+                OnOutput(si, $"<cloudflared failed to start: {ex.Message}>");
+                throw;
+            }
+        }
+
+        public async Task StopCloudflareTunnelAsync(string name)
+        {
+            var si = Servers.FirstOrDefault(s => s.Name == name);
+            if (si == null) throw new InvalidOperationException("Server not found");
+            if (!si.IsTunnelRunning || si.CloudflaredProcess == null) return;
+
+            try
+            {
+                if (!si.CloudflaredProcess.HasExited)
+                {
+                    try { si.CloudflaredProcess.Kill(); } catch (Exception ex) { OnOutput(si, $"<failed to kill cloudflared: {ex.Message}>"); }
+                }
+            }
+            finally
+            {
+                si.IsTunnelRunning = false;
+                si.CloudflaredProcess = null;
+                OnOutput(si, "<cloudflared stopped>");
+            }
+        }
+
+        private static Tuple<string, string> SplitCommand(string command)
+        {
+            if (string.IsNullOrWhiteSpace(command)) return Tuple.Create(string.Empty, string.Empty);
+            // naive split: first token is exe (handles quoted paths)
+            command = command.Trim();
+            if (command.StartsWith("\"") || command.StartsWith("\'"))
+            {
+                var quote = command[0];
+                var end = command.IndexOf(quote, 1);
+                if (end > 0)
+                {
+                    var exe = command.Substring(1, end - 1);
+                    var args = command.Substring(end + 1).Trim();
+                    return Tuple.Create(exe, args);
+                }
+            }
+            var idx = command.IndexOf(' ');
+            if (idx < 0) return Tuple.Create(command, string.Empty);
+            var first = command.Substring(0, idx);
+            var rest = command.Substring(idx + 1).Trim();
+            return Tuple.Create(first, rest);
+        }
+
         public void SendCommand(string name, string command)
         {
             var si = Servers.FirstOrDefault(s => s.Name == name);
@@ -373,12 +478,19 @@ namespace mcserv
         public string Name { get; set; }
         public string FolderPath { get; set; }
         public string JarUrl { get; set; }
+        public string TunnelCommand { get; set; }
 
         [JsonIgnore]
         public Process Process { get; set; }
 
         [JsonIgnore]
         public bool IsRunning { get; set; }
+
+    [JsonIgnore]
+    public Process CloudflaredProcess { get; set; }
+
+    [JsonIgnore]
+    public bool IsTunnelRunning { get; set; }
 
         [JsonIgnore]
         public string ConsoleBuffer { get; set; }
