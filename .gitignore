@@ -1,0 +1,79 @@
+# Visual Studio / .NET .gitignore
+# Generated for a C# WinForms project
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build results
+[Bb]in/
+[Oo]bj/
+*/bin/
+*/obj/
+Debug/
+Release/
+publish/
+
+# Visual Studio Code workspace
+.vscode/
+*.code-workspace
+
+# Visual Studio local settings
+.vs/
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+packages/
+.nuget/
+
+# Dotnet
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Logs and databases
+*.log
+*.tlog
+*.db
+*.sqlite
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+~$*
+
+# Build artifacts
+*.dll
+*.exe
+*.pdb
+*.cache
+
+# Resource files
+*.resources
+
+# Ignore the application-created server folders and data
+/servers/
+/bin/Debug/servers/
+/bin/Release/servers/
+
+# Ignore Visual Studio publish and packaging output
+*.publishsettings
+publish/
+
+# Ignore JetBrains Rider caches
+.idea/
+
+# Ignore composer/vendor etc (not applicable but safe)
+/vendor/
+
+# End of file
