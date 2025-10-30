@@ -28,15 +28,18 @@
         /// </summary>
         private void InitializeComponent()
         {
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form1));
+            this.components = new System.ComponentModel.Container();
             this.menuStrip1 = new System.Windows.Forms.MenuStrip();
             this.fileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.listBox1 = new System.Windows.Forms.ListBox();
             this.label1 = new System.Windows.Forms.Label();
             this.tabControl1 = new System.Windows.Forms.TabControl();
             this.tabPage1 = new System.Windows.Forms.TabPage();
             this.groupBox4 = new System.Windows.Forms.GroupBox();
             this.groupBox5 = new System.Windows.Forms.GroupBox();
+            this.button10 = new System.Windows.Forms.Button();
+            this.textBox4 = new System.Windows.Forms.TextBox();
             this.button9 = new System.Windows.Forms.Button();
             this.label2 = new System.Windows.Forms.Label();
             this.button7 = new System.Windows.Forms.Button();
@@ -58,8 +61,8 @@
             this.tabPage3 = new System.Windows.Forms.TabPage();
             this.richTextBox2 = new System.Windows.Forms.RichTextBox();
             this.tabPage4 = new System.Windows.Forms.TabPage();
-            this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.webBrowser1 = new System.Windows.Forms.WebBrowser();
+            this.contextMenuStrip1 = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.menuStrip1.SuspendLayout();
             this.tabControl1.SuspendLayout();
             this.tabPage1.SuspendLayout();
@@ -90,6 +93,13 @@
             this.fileToolStripMenuItem.Name = "fileToolStripMenuItem";
             this.fileToolStripMenuItem.Size = new System.Drawing.Size(37, 20);
             this.fileToolStripMenuItem.Text = "File";
+            // 
+            // exitToolStripMenuItem
+            // 
+            this.exitToolStripMenuItem.Name = "exitToolStripMenuItem";
+            this.exitToolStripMenuItem.Size = new System.Drawing.Size(92, 22);
+            this.exitToolStripMenuItem.Text = "Exit";
+            this.exitToolStripMenuItem.Click += new System.EventHandler(this.exitToolStripMenuItem_Click);
             // 
             // listBox1
             // 
@@ -140,10 +150,12 @@
             this.groupBox4.Size = new System.Drawing.Size(625, 215);
             this.groupBox4.TabIndex = 4;
             this.groupBox4.TabStop = false;
-            this.groupBox4.Text = "Network and port mapping";
+            this.groupBox4.Text = "Network and Port Mapping";
             // 
             // groupBox5
             // 
+            this.groupBox5.Controls.Add(this.button10);
+            this.groupBox5.Controls.Add(this.textBox4);
             this.groupBox5.Controls.Add(this.button9);
             this.groupBox5.Controls.Add(this.label2);
             this.groupBox5.Controls.Add(this.button7);
@@ -153,7 +165,23 @@
             this.groupBox5.Size = new System.Drawing.Size(612, 190);
             this.groupBox5.TabIndex = 5;
             this.groupBox5.TabStop = false;
-            this.groupBox5.Text = "Cloudflare";
+            this.groupBox5.Text = "ngrok";
+            // 
+            // button10
+            // 
+            this.button10.Location = new System.Drawing.Point(499, 20);
+            this.button10.Name = "button10";
+            this.button10.Size = new System.Drawing.Size(106, 23);
+            this.button10.TabIndex = 5;
+            this.button10.Text = "Add authtoken";
+            this.button10.UseVisualStyleBackColor = true;
+            // 
+            // textBox4
+            // 
+            this.textBox4.Location = new System.Drawing.Point(135, 22);
+            this.textBox4.Name = "textBox4";
+            this.textBox4.Size = new System.Drawing.Size(358, 20);
+            this.textBox4.TabIndex = 4;
             // 
             // button9
             // 
@@ -161,7 +189,7 @@
             this.button9.Name = "button9";
             this.button9.Size = new System.Drawing.Size(154, 23);
             this.button9.TabIndex = 3;
-            this.button9.Text = "Download Cloudflare";
+            this.button9.Text = "Download ngrok";
             this.button9.UseVisualStyleBackColor = true;
             // 
             // label2
@@ -169,9 +197,11 @@
             this.label2.AutoSize = true;
             this.label2.Location = new System.Drawing.Point(6, 143);
             this.label2.Name = "label2";
-            this.label2.Size = new System.Drawing.Size(440, 39);
+            this.label2.Size = new System.Drawing.Size(346, 39);
             this.label2.TabIndex = 2;
-            this.label2.Text = resources.GetString("label2.Text");
+            this.label2.Text = "ngrok is a tool that lets you securely expose your local computer \r\n(like your Mi" +
+    "necraft server running on localhost) to the internet — without \r\nneeding to mess" +
+    " with port forwarding or your router.";
             // 
             // button7
             // 
@@ -179,7 +209,7 @@
             this.button7.Name = "button7";
             this.button7.Size = new System.Drawing.Size(122, 23);
             this.button7.TabIndex = 1;
-            this.button7.Text = "Stop CF tunnel";
+            this.button7.Text = "Stop ngrok";
             this.button7.UseVisualStyleBackColor = true;
             // 
             // button6
@@ -188,7 +218,7 @@
             this.button6.Name = "button6";
             this.button6.Size = new System.Drawing.Size(122, 23);
             this.button6.TabIndex = 0;
-            this.button6.Text = "Start CF tunnel";
+            this.button6.Text = "Start ngrok";
             this.button6.UseVisualStyleBackColor = true;
             // 
             // groupBox1
@@ -200,7 +230,7 @@
             this.groupBox1.Size = new System.Drawing.Size(625, 147);
             this.groupBox1.TabIndex = 0;
             this.groupBox1.TabStop = false;
-            this.groupBox1.Text = "Server actions";
+            this.groupBox1.Text = "Server Actions";
             // 
             // groupBox3
             // 
@@ -335,7 +365,7 @@
             this.tabPage3.Padding = new System.Windows.Forms.Padding(3);
             this.tabPage3.Size = new System.Drawing.Size(637, 381);
             this.tabPage3.TabIndex = 3;
-            this.tabPage3.Text = "Cloudflared Console";
+            this.tabPage3.Text = "ngrok Console";
             this.tabPage3.UseVisualStyleBackColor = true;
             // 
             // richTextBox2
@@ -358,13 +388,6 @@
             this.tabPage4.Text = "Help";
             this.tabPage4.UseVisualStyleBackColor = true;
             // 
-            // exitToolStripMenuItem
-            // 
-            this.exitToolStripMenuItem.Name = "exitToolStripMenuItem";
-            this.exitToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
-            this.exitToolStripMenuItem.Text = "Exit";
-            this.exitToolStripMenuItem.Click += new System.EventHandler(this.exitToolStripMenuItem_Click);
-            // 
             // webBrowser1
             // 
             this.webBrowser1.Dock = System.Windows.Forms.DockStyle.Fill;
@@ -374,6 +397,11 @@
             this.webBrowser1.Size = new System.Drawing.Size(637, 381);
             this.webBrowser1.TabIndex = 0;
             this.webBrowser1.Url = new System.Uri("https://github.com/mschiller890/mcserv/wiki", System.UriKind.Absolute);
+            // 
+            // contextMenuStrip1
+            // 
+            this.contextMenuStrip1.Name = "contextMenuStrip1";
+            this.contextMenuStrip1.Size = new System.Drawing.Size(61, 4);
             // 
             // Form1
             // 
@@ -440,6 +468,9 @@
         private System.Windows.Forms.Button button9;
         private System.Windows.Forms.ToolStripMenuItem exitToolStripMenuItem;
         private System.Windows.Forms.WebBrowser webBrowser1;
+        private System.Windows.Forms.Button button10;
+        private System.Windows.Forms.TextBox textBox4;
+        private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
     }
 }
 

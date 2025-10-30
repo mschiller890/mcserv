@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.IO;
+// using Microsoft.VisualBasic; // not required when using a dedicated TextBox for token input
 
 namespace mcserv
 {
@@ -34,13 +35,65 @@ namespace mcserv
             this.button7.Click += ButtonStopCF_Click; // Stop CF tunnel
             this.button8.Click += ButtonConsoleSend_Click; // Console send
             this.button9.Click += ButtonDownloadCF_Click; // Console send
+            this.button10.Click += ButtonAddToken_Click; // Add Token
 
             this.listBox1.SelectedIndexChanged += ListBox1_SelectedIndexChanged;
         }
 
+        private void ButtonAddToken_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                // Read the ngrok authtoken from the dedicated TextBox (textBox4)
+                var token = textBox4.Text?.Trim();
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    // user cancelled or didn't enter anything
+                    return;
+                }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "ngrok",
+                    Arguments = $"authtoken {token}",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using (var p = Process.Start(psi))
+                {
+                    if (p == null)
+                    {
+                        MessageBox.Show("Failed to start ngrok. Make sure ngrok is installed and on PATH.");
+                        return;
+                    }
+
+                    // Read both streams
+                    var stdout = p.StandardOutput.ReadToEnd();
+                    var stderr = p.StandardError.ReadToEnd();
+                    p.WaitForExit(5000);
+
+                    if (!string.IsNullOrWhiteSpace(stderr))
+                    {
+                        MessageBox.Show("ngrok reported an error:\n" + stderr);
+                    }
+                    else
+                    {
+                        MessageBox.Show("ngrok authtoken set successfully." + (string.IsNullOrWhiteSpace(stdout) ? string.Empty : "\n\n" + stdout));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to add ngrok authtoken: " + ex.Message);
+            }
+        }
+
         private void ButtonDownloadCF_Click(object sender, EventArgs e)
         {
-            System.Diagnostics.Process.Start("https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/downloads/#latest-release");
+            System.Diagnostics.Process.Start("https://ngrok.com/download");
         }
 
         private async void Form1_Load(object sender, EventArgs e)
@@ -104,15 +157,15 @@ namespace mcserv
             // Find server name for this output (if known)
             var si = serverManager.Servers.FirstOrDefault(s => s.Id == e.ServerId);
             var prefix = si != null ? $"[{si.Name}] " : string.Empty;
-            // Route cloudflared output to richTextBox2 (separate console)
-            if (e.Line != null && e.Line.StartsWith("[cloudflared]", StringComparison.OrdinalIgnoreCase))
+            // Route ngrok output to richTextBox2 (separate console)
+            if (e.Line != null && e.Line.StartsWith("[ngrok]", StringComparison.OrdinalIgnoreCase))
             {
                 if (richTextBox2 != null)
                     richTextBox2.AppendText(prefix + e.Line + Environment.NewLine);
                 else
                     richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
             }
-            else if (e.Line != null && e.Line.StartsWith("<cloudflared", StringComparison.OrdinalIgnoreCase))
+            else if (e.Line != null && e.Line.StartsWith("<ngrok", StringComparison.OrdinalIgnoreCase))
             {
                 if (richTextBox2 != null)
                     richTextBox2.AppendText(prefix + e.Line + Environment.NewLine);
@@ -216,12 +269,12 @@ namespace mcserv
             var si = serverManager.Servers[idx];
             try
             {
-                // start cloudflared tunnel; run in background
-                _ = serverManager.StartCloudflareTunnelAsync(si.Name);
+                    // start ngrok tunnel; run in background
+                _ = serverManager.StartNgrokTunnelAsync(si.Name);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to start cloudflared: " + ex.Message);
+                    MessageBox.Show("Failed to start ngrok: " + ex.Message);
             }
         }
 
@@ -232,11 +285,11 @@ namespace mcserv
             var si = serverManager.Servers[idx];
             try
             {
-                _ = serverManager.StopCloudflareTunnelAsync(si.Name);
+                _ = serverManager.StopNgrokTunnelAsync(si.Name);
             }
             catch (Exception ex)
             {
-                MessageBox.Show("Failed to stop cloudflared: " + ex.Message);
+                MessageBox.Show("Failed to stop ngrok: " + ex.Message);
             }
         }
 

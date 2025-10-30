@@ -260,17 +260,17 @@ namespace mcserv
         }
 
         /// <summary>
-        /// Start a cloudflared tunnel for the named server using the server's TunnelCommand (or a sensible default).
+        /// Start an ngrok tunnel for the named server using the server's TunnelCommand (or a sensible default).
         /// Captures stdout/stderr and emits ServerOutput events.
         /// </summary>
-        public async Task StartCloudflareTunnelAsync(string name)
+        public async Task StartNgrokTunnelAsync(string name)
         {
             var si = Servers.FirstOrDefault(s => s.Name == name);
             if (si == null) throw new InvalidOperationException("Server not found");
 
             if (si.IsTunnelRunning)
             {
-                OnOutput(si, "<cloudflared already running>");
+                OnOutput(si, "<ngrok already running>");
                 return;
             }
 
@@ -279,7 +279,8 @@ namespace mcserv
             if (string.IsNullOrWhiteSpace(cmd))
             {
                 // use tcp tunnel to localhost:25565 (common for Minecraft)
-                cmd = "cloudflared tunnel --url tcp://localhost:25565";
+                // default to ngrok's tcp mode
+                cmd = "ngrok tcp 25565";
             }
 
             // split executable and args simply
@@ -301,43 +302,43 @@ namespace mcserv
             try
             {
                 var p = new Process { StartInfo = psi, EnableRaisingEvents = true };
-                p.OutputDataReceived += (s, e) => { if (e.Data != null) OnOutput(si, "[cloudflared] " + e.Data); };
-                p.ErrorDataReceived += (s, e) => { if (e.Data != null) OnOutput(si, "[cloudflared] " + e.Data); };
-                p.Exited += (s, e) => { si.IsTunnelRunning = false; OnOutput(si, "<cloudflared exited>"); };
+                p.OutputDataReceived += (s, e) => { if (e.Data != null) OnOutput(si, "[ngrok] " + e.Data); };
+                p.ErrorDataReceived += (s, e) => { if (e.Data != null) OnOutput(si, "[ngrok] " + e.Data); };
+                p.Exited += (s, e) => { si.IsTunnelRunning = false; OnOutput(si, "<ngrok exited>"); };
 
-                if (!p.Start()) throw new InvalidOperationException("Failed to start cloudflared process");
+                if (!p.Start()) throw new InvalidOperationException("Failed to start ngrok process");
                 p.BeginOutputReadLine();
                 p.BeginErrorReadLine();
 
-                si.CloudflaredProcess = p;
+                si.NgrokProcess = p;
                 si.IsTunnelRunning = true;
-                OnOutput(si, $"<cloudflared started: {cmd}>");
+                OnOutput(si, $"<ngrok started: {cmd}>");
             }
             catch (Exception ex)
             {
-                OnOutput(si, $"<cloudflared failed to start: {ex.Message}>");
+                OnOutput(si, $"<ngrok failed to start: {ex.Message}>");
                 throw;
             }
         }
 
-        public async Task StopCloudflareTunnelAsync(string name)
+        public async Task StopNgrokTunnelAsync(string name)
         {
             var si = Servers.FirstOrDefault(s => s.Name == name);
             if (si == null) throw new InvalidOperationException("Server not found");
-            if (!si.IsTunnelRunning || si.CloudflaredProcess == null) return;
+            if (!si.IsTunnelRunning || si.NgrokProcess == null) return;
 
             try
             {
-                if (!si.CloudflaredProcess.HasExited)
+                if (!si.NgrokProcess.HasExited)
                 {
-                    try { si.CloudflaredProcess.Kill(); } catch (Exception ex) { OnOutput(si, $"<failed to kill cloudflared: {ex.Message}>"); }
+                    try { si.NgrokProcess.Kill(); } catch (Exception ex) { OnOutput(si, $"<failed to kill ngrok: {ex.Message}>"); }
                 }
             }
             finally
             {
                 si.IsTunnelRunning = false;
-                si.CloudflaredProcess = null;
-                OnOutput(si, "<cloudflared stopped>");
+                si.NgrokProcess = null;
+                OnOutput(si, "<ngrok stopped>");
             }
         }
 
@@ -487,7 +488,7 @@ namespace mcserv
         public bool IsRunning { get; set; }
 
     [JsonIgnore]
-    public Process CloudflaredProcess { get; set; }
+    public Process NgrokProcess { get; set; }
 
     [JsonIgnore]
     public bool IsTunnelRunning { get; set; }
