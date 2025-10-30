@@ -7,6 +7,9 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Net;
+using System.Net.Sockets;
+using System.Xml;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -312,7 +315,59 @@ namespace mcserv
 
                 si.NgrokProcess = p;
                 si.IsTunnelRunning = true;
-                OnOutput(si, $"<ngrok started: {cmd}>");
+                OnOutput(si, $"<ngrok started: {cmd} (pid {p.Id}) at {DateTime.Now:O}>");
+                // Try to query ngrok's local web API (default: 127.0.0.1:4040) to obtain the public tunnel URL
+                try
+                {
+                    var apiUrl = "http://127.0.0.1:4040/api/tunnels";
+                    string publicUrl = null;
+                    // poll a few times for ngrok to register the tunnel
+                    for (int attempt = 0; attempt < 10 && string.IsNullOrEmpty(publicUrl); attempt++)
+                    {
+                        try
+                        {
+                            var resp = await http.GetAsync(apiUrl);
+                            if (resp.IsSuccessStatusCode)
+                            {
+                                var body = await resp.Content.ReadAsStringAsync();
+                                using (var doc = JsonDocument.Parse(body))
+                                {
+                                    if (doc.RootElement.TryGetProperty("tunnels", out var tunnels) && tunnels.ValueKind == JsonValueKind.Array)
+                                    {
+                                        foreach (var t in tunnels.EnumerateArray())
+                                        {
+                                            if (t.TryGetProperty("public_url", out var pu) && pu.ValueKind == JsonValueKind.String)
+                                            {
+                                                var url = pu.GetString();
+                                                if (!string.IsNullOrWhiteSpace(url))
+                                                {
+                                                    publicUrl = url;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        catch { /* ignore transient errors while ngrok starts */ }
+
+                        if (string.IsNullOrEmpty(publicUrl))
+                            await Task.Delay(500);
+                    }
+
+                    if (!string.IsNullOrEmpty(publicUrl))
+                    {
+                        var changed = !string.Equals(si.LastNgrokPublicUrl, publicUrl, StringComparison.OrdinalIgnoreCase);
+                        OnOutput(si, $"<ngrok tunnel: {publicUrl}>" + (changed ? " <changed>" : " <unchanged>"));
+                        si.LastNgrokPublicUrl = publicUrl;
+                    }
+                    else
+                    {
+                        OnOutput(si, "<ngrok: public URL not available yet>");
+                    }
+                }
+                catch { /* non-fatal */ }
             }
             catch (Exception ex)
             {
@@ -339,6 +394,263 @@ namespace mcserv
                 si.IsTunnelRunning = false;
                 si.NgrokProcess = null;
                 OnOutput(si, "<ngrok stopped>");
+            }
+        }
+
+        /// <summary>
+        /// Start UPnP port forwarding (AddPortMapping) so the server becomes publicly reachable.
+        /// </summary>
+        public async Task StartPortForwardingAsync(string name, int internalPort = 25565, int externalPort = 0)
+        {
+            var si = Servers.FirstOrDefault(s => s.Name == name);
+            if (si == null) throw new InvalidOperationException("Server not found");
+
+            if (si.IsPortForwarded)
+            {
+                OnOutput(si, "<portforward already running>");
+                return;
+            }
+
+            if (externalPort == 0) externalPort = internalPort;
+
+            // SSDP discovery for WANIPConnection service
+            string location = null;
+            try
+            {
+                using (var udp = new UdpClient())
+                {
+                    udp.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    udp.Client.ReceiveTimeout = 2000;
+                    var msg =
+                        "M-SEARCH * HTTP/1.1\r\n" +
+                        "HOST:239.255.255.250:1900\r\n" +
+                        "MAN:\"ssdp:discover\"\r\n" +
+                        "MX:2\r\n" +
+                        "ST:urn:schemas-upnp-org:service:WANIPConnection:1\r\n" +
+                        "\r\n";
+                    var data = Encoding.UTF8.GetBytes(msg);
+                    var ep = new IPEndPoint(IPAddress.Parse("239.255.255.250"), 1900);
+                    OnOutput(si, "<portforward: sending SSDP discovery to 239.255.255.250:1900>");
+                    await udp.SendAsync(data, data.Length, ep);
+
+                    var start = DateTime.UtcNow;
+                    while ((DateTime.UtcNow - start).TotalMilliseconds < 2000)
+                    {
+                        try
+                        {
+                            var res = await udp.ReceiveAsync();
+                            var resp = Encoding.UTF8.GetString(res.Buffer);
+                            // log a short snippet of the response for debugging
+                            var snippet = resp.Length > 512 ? resp.Substring(0, 512) + "..." : resp;
+                            OnOutput(si, "<portforward: SSDP response> " + snippet);
+                            foreach (var line in resp.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                if (line.StartsWith("LOCATION:", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    location = line.Substring(9).Trim();
+                                    OnOutput(si, "<portforward: discovered LOCATION=" + location + ">");
+                                    break;
+                                }
+                            }
+                            if (!string.IsNullOrEmpty(location)) break;
+                        }
+                        catch (SocketException se)
+                        {
+                            OnOutput(si, "<portforward: SSDP receive error: " + se.Message + ">");
+                            break;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                OnOutput(si, $"<portforward discovery failed: {ex.Message}>");
+            }
+
+            if (string.IsNullOrEmpty(location))
+            {
+                OnOutput(si, "<portforward: no IGD found>");
+                return;
+            }
+
+            try
+            {
+                var desc = await http.GetStringAsync(location);
+                var shortDesc = desc.Length > 1024 ? desc.Substring(0, 1024) + "..." : desc;
+                OnOutput(si, "<portforward: device description> " + shortDesc);
+                var xd = new XmlDocument();
+                xd.LoadXml(desc);
+
+                XmlNode serviceNode = null;
+                foreach (XmlNode sn in xd.GetElementsByTagName("service"))
+                {
+                    var st = sn.SelectSingleNode("serviceType");
+                    if (st != null && st.InnerText.Contains("WANIPConnection"))
+                    {
+                        serviceNode = sn;
+                        break;
+                    }
+                }
+
+                if (serviceNode == null)
+                {
+                    OnOutput(si, "<portforward: WANIPConnection service not found>");
+                    return;
+                }
+
+                var controlUrlNode = serviceNode.SelectSingleNode("controlURL");
+                var serviceTypeNode = serviceNode.SelectSingleNode("serviceType");
+                if (controlUrlNode == null || serviceTypeNode == null)
+                {
+                    OnOutput(si, "<portforward: invalid service description>");
+                    return;
+                }
+
+                var controlUrl = controlUrlNode.InnerText.Trim();
+                var serviceType = serviceTypeNode.InnerText.Trim();
+                OnOutput(si, $"<portforward: serviceType={serviceType} controlURL={controlUrl}>");
+                var baseUri = new Uri(location);
+                var controlUri = controlUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? new Uri(controlUrl) : new Uri(baseUri, controlUrl);
+
+                var localIp = GetLocalIPAddress();
+                if (localIp == null)
+                {
+                    OnOutput(si, "<portforward: could not determine local IP>");
+                    return;
+                }
+
+                var addSoap = "<?xml version=\"1.0\"?>\r\n" +
+                              "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\r\n" +
+                              " <s:Body>\r\n" +
+                              $"  <u:AddPortMapping xmlns:u=\"{serviceType}\">\r\n" +
+                              "    <NewRemoteHost></NewRemoteHost>\r\n" +
+                              $"    <NewExternalPort>{externalPort}</NewExternalPort>\r\n" +
+                              "    <NewProtocol>TCP</NewProtocol>\r\n" +
+                              $"    <NewInternalPort>{internalPort}</NewInternalPort>\r\n" +
+                              $"    <NewInternalClient>{localIp}</NewInternalClient>\r\n" +
+                              "    <NewEnabled>1</NewEnabled>\r\n" +
+                              "    <NewPortMappingDescription>mcserv</NewPortMappingDescription>\r\n" +
+                              "    <NewLeaseDuration>0</NewLeaseDuration>\r\n" +
+                              "  </u:AddPortMapping>\r\n" +
+                              " </s:Body>\r\n" +
+                              "</s:Envelope>\r\n";
+
+                var req = new HttpRequestMessage(HttpMethod.Post, controlUri);
+                req.Content = new StringContent(addSoap, Encoding.UTF8, "text/xml");
+                req.Headers.Add("SOAPACTION", "\"" + serviceType + "#AddPortMapping\"");
+
+                OnOutput(si, "<portforward: sending AddPortMapping SOAP request>");
+                var resp = await http.SendAsync(req);
+                var respBody = await resp.Content.ReadAsStringAsync();
+                OnOutput(si, "<portforward: AddPortMapping response status=" + resp.StatusCode + ">" + (respBody.Length > 1024 ? respBody.Substring(0, 1024) + "..." : respBody));
+                if (!resp.IsSuccessStatusCode)
+                {
+                    OnOutput(si, $"<portforward add failed: {resp.StatusCode}>");
+                    return;
+                }
+
+                // Query external IP
+                var getSoap = "<?xml version=\"1.0\"?>\r\n" +
+                              "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\r\n" +
+                              " <s:Body>\r\n" +
+                              $"  <u:GetExternalIPAddress xmlns:u=\"{serviceType}\"/>\r\n" +
+                              " </s:Body>\r\n" +
+                              "</s:Envelope>\r\n";
+
+                var getReq = new HttpRequestMessage(HttpMethod.Post, controlUri);
+                getReq.Content = new StringContent(getSoap, Encoding.UTF8, "text/xml");
+                getReq.Headers.Add("SOAPACTION", "\"" + serviceType + "#GetExternalIPAddress\"");
+
+                string externalIp = null;
+                try
+                {
+                    OnOutput(si, "<portforward: sending GetExternalIPAddress SOAP request>");
+                    var getResp = await http.SendAsync(getReq);
+                    var getBody = await getResp.Content.ReadAsStringAsync();
+                    OnOutput(si, "<portforward: GetExternalIPAddress response status=" + getResp.StatusCode + ">" + (getBody.Length > 1024 ? getBody.Substring(0, 1024) + "..." : getBody));
+                    if (getResp.IsSuccessStatusCode)
+                    {
+                        var xd2 = new XmlDocument();
+                        xd2.LoadXml(getBody);
+                        var elems = xd2.GetElementsByTagName("NewExternalIPAddress");
+                        if (elems.Count > 0) externalIp = elems[0].InnerText.Trim();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    OnOutput(si, "<portforward: GetExternalIPAddress failed: " + ex.Message + ">");
+                }
+
+                si.IsPortForwarded = true;
+                si.PortForwardExternalPort = externalPort;
+                si.PortForwardExternalIp = externalIp;
+                si.PortMappingControlUrl = controlUri.ToString();
+                si.PortMappingServiceType = serviceType;
+
+                OnOutput(si, $"<portforward created: {externalIp ?? "?"}:{externalPort}>");
+            }
+            catch (Exception ex)
+            {
+                OnOutput(si, $"<portforward failed: {ex.Message}>");
+            }
+        }
+
+        public async Task StopPortForwardingAsync(string name)
+        {
+            var si = Servers.FirstOrDefault(s => s.Name == name);
+            if (si == null) throw new InvalidOperationException("Server not found");
+            if (!si.IsPortForwarded) return;
+
+            try
+            {
+                if (string.IsNullOrEmpty(si.PortMappingControlUrl) || string.IsNullOrEmpty(si.PortMappingServiceType))
+                {
+                    OnOutput(si, "<portforward: no mapping info to remove>");
+                    si.IsPortForwarded = false;
+                    return;
+                }
+
+                var controlUri = new Uri(si.PortMappingControlUrl);
+                var serviceType = si.PortMappingServiceType;
+                var externalPort = si.PortForwardExternalPort;
+
+                var delSoap = "<?xml version=\"1.0\"?>\r\n" +
+                              "<s:Envelope xmlns:s=\"http://schemas.xmlsoap.org/soap/envelope/\" s:encodingStyle=\"http://schemas.xmlsoap.org/soap/encoding/\">\r\n" +
+                              " <s:Body>\r\n" +
+                              $"  <u:DeletePortMapping xmlns:u=\"{serviceType}\">\r\n" +
+                              "    <NewRemoteHost></NewRemoteHost>\r\n" +
+                              $"    <NewExternalPort>{externalPort}</NewExternalPort>\r\n" +
+                              "    <NewProtocol>TCP</NewProtocol>\r\n" +
+                              "  </u:DeletePortMapping>\r\n" +
+                              " </s:Body>\r\n" +
+                              "</s:Envelope>\r\n";
+
+                var req = new HttpRequestMessage(HttpMethod.Post, controlUri);
+                req.Content = new StringContent(delSoap, Encoding.UTF8, "text/xml");
+                req.Headers.Add("SOAPACTION", "\"" + serviceType + "#DeletePortMapping\"");
+
+                var resp = await http.SendAsync(req);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    var body = await resp.Content.ReadAsStringAsync();
+                    OnOutput(si, $"<portforward delete failed: {resp.StatusCode} {body}>");
+                }
+                else
+                {
+                    OnOutput(si, "<portforward stopped>");
+                }
+            }
+            catch (Exception ex)
+            {
+                OnOutput(si, $"<portforward stop failed: {ex.Message}>");
+            }
+            finally
+            {
+                si.IsPortForwarded = false;
+                si.PortForwardExternalIp = null;
+                si.PortForwardExternalPort = 0;
+                si.PortMappingControlUrl = null;
+                si.PortMappingServiceType = null;
             }
         }
 
@@ -442,6 +754,32 @@ namespace mcserv
             return name;
         }
 
+        private string GetLocalIPAddress()
+        {
+            try
+            {
+                // prefer non-loopback IPv4 from DNS
+                var host = Dns.GetHostEntry(Dns.GetHostName());
+                foreach (var ip in host.AddressList)
+                {
+                    if (ip.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ip))
+                        return ip.ToString();
+                }
+
+                // fallback: open UDP socket to public IP and read local endpoint
+                using (var s = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp))
+                {
+                    s.Connect("8.8.8.8", 53);
+                    var ep = s.LocalEndPoint as IPEndPoint;
+                    return ep?.Address.ToString();
+                }
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private bool IsJavaInstalled()
         {
             try
@@ -489,6 +827,24 @@ namespace mcserv
 
     [JsonIgnore]
     public Process NgrokProcess { get; set; }
+
+    [JsonIgnore]
+    public bool IsPortForwarded { get; set; }
+
+    [JsonIgnore]
+    public int PortForwardExternalPort { get; set; }
+
+    [JsonIgnore]
+    public string PortForwardExternalIp { get; set; }
+
+    [JsonIgnore]
+    public string PortMappingControlUrl { get; set; }
+
+    [JsonIgnore]
+    public string PortMappingServiceType { get; set; }
+
+    [JsonIgnore]
+    public string LastNgrokPublicUrl { get; set; }
 
     [JsonIgnore]
     public bool IsTunnelRunning { get; set; }

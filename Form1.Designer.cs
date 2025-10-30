@@ -46,6 +46,7 @@
             this.button6 = new System.Windows.Forms.Button();
             this.groupBox1 = new System.Windows.Forms.GroupBox();
             this.groupBox3 = new System.Windows.Forms.GroupBox();
+            this.button11 = new System.Windows.Forms.Button();
             this.button5 = new System.Windows.Forms.Button();
             this.button3 = new System.Windows.Forms.Button();
             this.button4 = new System.Windows.Forms.Button();
@@ -185,9 +186,9 @@
             // 
             // button9
             // 
-            this.button9.Location = new System.Drawing.Point(452, 159);
+            this.button9.Location = new System.Drawing.Point(499, 159);
             this.button9.Name = "button9";
-            this.button9.Size = new System.Drawing.Size(154, 23);
+            this.button9.Size = new System.Drawing.Size(107, 23);
             this.button9.TabIndex = 3;
             this.button9.Text = "Download ngrok";
             this.button9.UseVisualStyleBackColor = true;
@@ -234,6 +235,7 @@
             // 
             // groupBox3
             // 
+            this.groupBox3.Controls.Add(this.button11);
             this.groupBox3.Controls.Add(this.button5);
             this.groupBox3.Controls.Add(this.button3);
             this.groupBox3.Controls.Add(this.button4);
@@ -243,6 +245,15 @@
             this.groupBox3.TabIndex = 3;
             this.groupBox3.TabStop = false;
             this.groupBox3.Text = "Runtime";
+            // 
+            // button11
+            // 
+            this.button11.Location = new System.Drawing.Point(207, 48);
+            this.button11.Name = "button11";
+            this.button11.Size = new System.Drawing.Size(106, 23);
+            this.button11.TabIndex = 4;
+            this.button11.Text = "K.S.A.N.";
+            this.button11.UseVisualStyleBackColor = true;
             // 
             // button5
             // 
@@ -257,7 +268,7 @@
             // 
             this.button3.Location = new System.Drawing.Point(6, 48);
             this.button3.Name = "button3";
-            this.button3.Size = new System.Drawing.Size(308, 23);
+            this.button3.Size = new System.Drawing.Size(195, 23);
             this.button3.TabIndex = 2;
             this.button3.Text = "Stop";
             this.button3.UseVisualStyleBackColor = true;
@@ -290,7 +301,6 @@
             this.textBox3.Name = "textBox3";
             this.textBox3.Size = new System.Drawing.Size(193, 20);
             this.textBox3.TabIndex = 4;
-            this.textBox3.Text = "server.jar URL";
             // 
             // textBox1
             // 
@@ -298,7 +308,6 @@
             this.textBox1.Name = "textBox1";
             this.textBox1.Size = new System.Drawing.Size(274, 20);
             this.textBox1.TabIndex = 3;
-            this.textBox1.Text = "Server name";
             // 
             // button2
             // 
@@ -471,6 +480,7 @@
         private System.Windows.Forms.Button button10;
         private System.Windows.Forms.TextBox textBox4;
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip1;
+        private System.Windows.Forms.Button button11;
     }
 }
 
