@@ -254,6 +254,7 @@
             this.button11.TabIndex = 4;
             this.button11.Text = "K.S.A.N.";
             this.button11.UseVisualStyleBackColor = true;
+            this.button11.Click += new System.EventHandler(this.button11_Click);
             // 
             // button5
             // 

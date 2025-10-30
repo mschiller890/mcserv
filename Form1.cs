@@ -37,14 +37,15 @@ namespace mcserv
             this.Load += Form1_Load;
             this.button1.Click += ButtonCreate_Click; // Create
             this.button2.Click += ButtonDelete_Click; // Delete
-            this.button4.Click += ButtonStart_Click; // Start
             this.button3.Click += ButtonStop_Click; // Stop
+            this.button4.Click += ButtonStart_Click; // Start
             this.button5.Click += ButtonRestart_Click; // Restart
             this.button6.Click += ButtonStartCF_Click; // Start ngrok tunnel
             this.button7.Click += ButtonStopCF_Click; // Stop ngrok tunnel
             this.button8.Click += ButtonConsoleSend_Click; // Console send
             this.button9.Click += ButtonDownloadCF_Click; // Console send
             this.button10.Click += ButtonAddToken_Click; // Add Token
+            //this.button11.Click += ButtonKillServerAndNgrok_Click; // Add Token
 
             SetCueBanner(this.textBox1, "Enter Server Name...");
             SetCueBanner(this.textBox3, "Enter server.jar URL...");
@@ -351,6 +352,12 @@ namespace mcserv
         private void exitToolStripMenuItem_Click(object sender, EventArgs e)
         {
             Environment.Exit(0);
+        }
+
+        private void button11_Click(object sender, EventArgs e)
+        {
+            ButtonStop_Click(sender, e);
+            ButtonStopCF_Click(sender, e);
         }
     }
 }
