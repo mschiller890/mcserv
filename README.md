@@ -1,29 +1,30 @@
 # MCServ
-MCServ is a lightweight and user-friendly Minecraft server manager designed to make hosting and managing servers simple. It provides an intuitive interface for starting, stopping, and configuring Minecraft servers — no command-line knowledge required.
+MCServ is a lightweight, no-nonsense Minecraft server manager built to make your life easier. Forget typing cryptic commands into terminals - MCServ gives you a clean, intuitive interface for starting, stopping, and configuring servers like a civilized human being.
 
 ## How It Works
-To make your Minecraft server accessible to friends, MCServ uses **ngrok** to create a secure TCP tunnel from your local machine to the internet.
+When you want your friends to join, MCServ uses **ngrok** to spin up a secure TCP tunnel straight to your local server. Basically, it makes your computer say, “hey world, I’m a Minecraft server now,” without exposing your entire network.
 
 ## Setup Guide
 
 ### 1) Download
-- You can either build MCServ yourself or download a prebuilt release from the **Releases** section.
+- Either build it yourself (for the DIY enjoyers) or grab a prebuilt release from the **Releases** section.  
+- It’s small, clean, and doesn’t come with weird extras. Promise.
 
 ### 2) Get ngrok
-- Download ngrok using the button in the bottom-right corner of the app or from the [ngrok website](https://ngrok.com/).
-- Create a free account and copy your **authtoken**.
-- Paste the authtoken into the textbox in MCServ, then click **Add Authtoken**.
+- Download ngrok from the button in the bottom-right corner of MCServ or from the [official website](https://ngrok.com/).  
+- Make an account, copy your **authtoken**, and paste it into the textbox in the app.  
+- Hit **Add Authtoken** and boom - you’re in.
 
 ### 3) Create a Server
-- Choose a name for your server.
-- Paste the URL of your desired `server.jar`.
-- Click **Create** to generate your server instance.
+- Give your server a name (yes, it can be something cursed).  
+- Paste in the URL to your `server.jar`.  
+- Click **Create** and watch MCServ handle the setup magic.
 
 ### 4) Run the Server
-- Under the **Runtime** section, click **Start** to launch your server.
-- To make your server public, click **Start ngrok** in the **ngrok** section.
-- Monitor logs and potential errors in the **Server Console** and **ngrok Console** tabs.
+- Under **Runtime**, click **Start** to launch your server.  
+- Want friends to join? Hit **Start ngrok** under the **ngrok** section.  
+- Keep an eye on the **Server Console** and **ngrok Console** tabs for logs, errors, and the occasional “oh no” moment.
 
 ---
 
-MCServ handles the technical setup so you can focus on what matters most — playing Minecraft with your friends.
+MCServ doesn’t overcomplicate things - it just works. You bring the server jar, it brings the vibes. Now go forth and build your blocky empire.
