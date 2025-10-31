@@ -703,7 +703,50 @@ namespace mcserv
             // buffer
             si.ConsoleBuffer = (si.ConsoleBuffer ?? string.Empty) + line + Environment.NewLine;
             ServerOutput?.Invoke(this, new ServerOutputEventArgs { ServerId = si.Id, Line = line });
+
+            if (line.Contains("[ServerMain/INFO]: You need to agree to the EULA in order to run the server."))
+            {
+                // Find the main UI thread (Form) and invoke on it if needed
+                if (Application.OpenForms.Count > 0)
+                {
+                    var mainForm = Application.OpenForms[0];
+                    if (mainForm.InvokeRequired)
+                    {
+                        mainForm.Invoke((Action)(() =>
+                        {
+                            MessageBox.Show(
+                                mainForm,
+                                "You need to agree to the EULA before starting your server.",
+                                "EULA Required",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Warning
+                            );
+                        }));
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            mainForm,
+                            "You need to agree to the EULA before starting your server.",
+                            "EULA Required",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                    }
+                }
+                else
+                {
+                    // Fallback if no forms are open
+                    MessageBox.Show(
+                        "You need to agree to the EULA before starting your server.",
+                        "EULA Required",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning
+                    );
+                }
+            }
         }
+
 
         private async Task DownloadToFileAsync(string url, string destPath, ServerInstance si)
         {

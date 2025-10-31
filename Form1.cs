@@ -33,6 +33,8 @@ namespace mcserv
             serversDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "servers");
             serverManager = new ServerManager(serversDir);
 
+            this.FormClosing += MainForm_FormClosing;
+
             // wire up UI events
             this.Load += Form1_Load;
             this.button1.Click += ButtonCreate_Click; // Create
@@ -53,6 +55,19 @@ namespace mcserv
             SetCueBanner(this.textBox2, "/help");
 
             this.listBox1.SelectedIndexChanged += ListBox1_SelectedIndexChanged;
+            // allow pressing Enter in the console input to send the command
+            this.textBox2.KeyDown += TextBox2_KeyDown;
+        }
+
+        private void TextBox2_KeyDown(object sender, KeyEventArgs e)
+        {
+            // If Enter is pressed (without Shift), send the command and prevent the ding/newline
+            if (e.KeyCode == Keys.Enter && !e.Shift)
+            {
+                e.SuppressKeyPress = true;
+                // call the same logic as the Send button
+                ButtonConsoleSend_Click(sender, EventArgs.Empty);
+            }
         }
 
         private void SetCueBanner(TextBox box, string text)
@@ -126,6 +141,24 @@ namespace mcserv
                 serverManager.Save();
                 serverManager.ServerOutput += ServerManager_ServerOutput;
                 RefreshServerList();
+                // initialize WebView2 help tab if available
+                try
+                {
+                    if (this.webView21 != null)
+                    {
+                        await this.webView21.EnsureCoreWebView2Async(null);
+                        try
+                        {
+                            this.webView21.CoreWebView2.Navigate("https://github.com/mschiller890/mcserv/wiki");
+                        }
+                        catch
+                        {
+                            // fallback: set Source if CoreWebView2 navigation fails
+                            try { this.webView21.Source = new Uri("https://github.com/mschiller890/mcserv/wiki"); } catch { }
+                        }
+                    }
+                }
+                catch { /* non-fatal if WebView2 not available */ }
             }
             catch (Exception ex)
             {
@@ -161,8 +194,219 @@ namespace mcserv
                 var si = serverManager.Servers[idx];
                 richTextBox1.Clear();
                 if (!string.IsNullOrEmpty(si.ConsoleBuffer))
-                    richTextBox1.AppendText(si.ConsoleBuffer + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox1, si.ConsoleBuffer + Environment.NewLine);
+                // load server.properties into DataGridView for editing
+                LoadServerPropertiesIntoGrid(si);
             }
+            else
+            {
+                // no selection: clear properties grid
+                ClearPropertiesGrid();
+            }
+        }
+
+        // internal representation of a properties file line
+        private class PropertyLine
+        {
+            public enum LineType { Comment, Blank, Setting }
+            public LineType Type { get; set; }
+            public string RawText { get; set; }
+            public string Key { get; set; }
+            public string Value { get; set; }
+        }
+
+        private Guid currentPropsServerId = Guid.Empty;
+        private List<PropertyLine> currentProps = null;
+        private bool suppressGridEvents = false;
+
+        private void ClearPropertiesGrid()
+        {
+            suppressGridEvents = true;
+            try
+            {
+                dataGridView1.Columns.Clear();
+                dataGridView1.Rows.Clear();
+            }
+            finally { suppressGridEvents = false; }
+        }
+
+        private void EnsureGridColumns()
+        {
+            if (dataGridView1.Columns.Count == 0)
+            {
+                var colKey = new DataGridViewTextBoxColumn { Name = "Key", HeaderText = "Key", ReadOnly = true, Width = 300 };
+                var colValue = new DataGridViewTextBoxColumn { Name = "Value", HeaderText = "Value", ReadOnly = false, AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill };
+                dataGridView1.Columns.Add(colKey);
+                dataGridView1.Columns.Add(colValue);
+            }
+        }
+
+        private void LoadServerPropertiesIntoGrid(ServerInstance si)
+        {
+            try
+            {
+                var path = Path.Combine(si.FolderPath ?? string.Empty, "server.properties");
+                List<PropertyLine> lines = new List<PropertyLine>();
+                if (File.Exists(path))
+                {
+                    var raw = File.ReadAllLines(path);
+                    foreach (var r in raw)
+                    {
+                        if (string.IsNullOrWhiteSpace(r))
+                        {
+                            lines.Add(new PropertyLine { Type = PropertyLine.LineType.Blank, RawText = r });
+                        }
+                        else if (r.TrimStart().StartsWith("#"))
+                        {
+                            lines.Add(new PropertyLine { Type = PropertyLine.LineType.Comment, RawText = r });
+                        }
+                        else
+                        {
+                            var idx = r.IndexOf('=');
+                            if (idx >= 0)
+                            {
+                                var k = r.Substring(0, idx).Trim();
+                                var v = r.Substring(idx + 1);
+                                lines.Add(new PropertyLine { Type = PropertyLine.LineType.Setting, RawText = r, Key = k, Value = v });
+                            }
+                            else
+                            {
+                                // treat as raw/comment if it doesn't contain '='
+                                lines.Add(new PropertyLine { Type = PropertyLine.LineType.Comment, RawText = r });
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    // file doesn't exist: start with empty list
+                    lines = new List<PropertyLine>();
+                }
+
+                // populate grid with setting lines
+                suppressGridEvents = true;
+                try
+                {
+                    EnsureGridColumns();
+                    dataGridView1.Rows.Clear();
+                    foreach (var pl in lines)
+                    {
+                        if (pl.Type == PropertyLine.LineType.Setting)
+                        {
+                            dataGridView1.Rows.Add(pl.Key, pl.Value);
+                        }
+                    }
+                }
+                finally { suppressGridEvents = false; }
+
+                currentProps = lines;
+                currentPropsServerId = si.Id;
+
+                // wire events (ensure only once)
+                dataGridView1.CellValueChanged -= DataGridView1_CellValueChanged;
+                dataGridView1.CellValueChanged += DataGridView1_CellValueChanged;
+                dataGridView1.CurrentCellDirtyStateChanged -= DataGridView1_CurrentCellDirtyStateChanged;
+                dataGridView1.CurrentCellDirtyStateChanged += DataGridView1_CurrentCellDirtyStateChanged;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to load server.properties: " + ex.Message);
+            }
+        }
+
+        private void DataGridView1_CurrentCellDirtyStateChanged(object sender, EventArgs e)
+        {
+            if (dataGridView1.IsCurrentCellDirty)
+            {
+                // commit immediately so CellValueChanged fires
+                dataGridView1.CommitEdit(DataGridViewDataErrorContexts.Commit);
+            }
+        }
+
+        private void DataGridView1_CellValueChanged(object sender, DataGridViewCellEventArgs e)
+        {
+            if (suppressGridEvents) return;
+            try
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex != 1) return; // only handle Value column
+                if (currentProps == null) return;
+
+                var key = dataGridView1.Rows[e.RowIndex].Cells[0].Value?.ToString();
+                var newVal = dataGridView1.Rows[e.RowIndex].Cells[1].Value?.ToString() ?? string.Empty;
+                if (string.IsNullOrEmpty(key)) return;
+
+                // update first matching setting in currentProps
+                var found = false;
+                for (int i = 0; i < currentProps.Count; i++)
+                {
+                    var pl = currentProps[i];
+                    if (pl.Type == PropertyLine.LineType.Setting && string.Equals(pl.Key, key, StringComparison.Ordinal))
+                    {
+                        pl.Value = newVal;
+                        pl.RawText = pl.Key + "=" + pl.Value;
+                        currentProps[i] = pl;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    // not found in original file: append at end
+                    var pl = new PropertyLine { Type = PropertyLine.LineType.Setting, Key = key, Value = newVal, RawText = key + "=" + newVal };
+                    currentProps.Add(pl);
+                }
+
+                // save back to file for current server
+                SaveCurrentPropertiesToFile();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to save property change: " + ex.Message);
+            }
+        }
+
+        private void SaveCurrentPropertiesToFile()
+        {
+            try
+            {
+                if (currentProps == null || currentPropsServerId == Guid.Empty) return;
+                var si = serverManager.Servers.FirstOrDefault(s => s.Id == currentPropsServerId);
+                if (si == null) return;
+                var path = Path.Combine(si.FolderPath ?? string.Empty, "server.properties");
+
+                var outLines = new List<string>();
+                foreach (var pl in currentProps)
+                {
+                    if (pl.Type == PropertyLine.LineType.Setting)
+                    {
+                        outLines.Add(pl.Key + "=" + (pl.Value ?? string.Empty));
+                    }
+                    else
+                    {
+                        outLines.Add(pl.RawText ?? string.Empty);
+                    }
+                }
+
+                File.WriteAllLines(path, outLines);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to save server.properties: " + ex.Message);
+            }
+        }
+
+        private void AppendTextAndScroll(RichTextBox box, string text)
+        {
+            if (box == null) return;
+            try
+            {
+                box.AppendText(text ?? string.Empty);
+                // move caret to end and scroll
+                box.SelectionStart = box.TextLength;
+                box.ScrollToCaret();
+            }
+            catch { /* ignore UI race errors */ }
         }
 
         private void ServerManager_ServerOutput(object sender, ServerOutputEventArgs e)
@@ -181,20 +425,20 @@ namespace mcserv
             if (e.Line != null && e.Line.StartsWith("[ngrok]", StringComparison.OrdinalIgnoreCase))
             {
                 if (richTextBox2 != null)
-                    richTextBox2.AppendText(prefix + e.Line + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox2, prefix + e.Line + Environment.NewLine);
                 else
-                    richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox1, prefix + e.Line + Environment.NewLine);
             }
             else if (e.Line != null && e.Line.StartsWith("<ngrok", StringComparison.OrdinalIgnoreCase))
             {
                 if (richTextBox2 != null)
-                    richTextBox2.AppendText(prefix + e.Line + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox2, prefix + e.Line + Environment.NewLine);
                 else
-                    richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox1, prefix + e.Line + Environment.NewLine);
             }
             else
             {
-                richTextBox1.AppendText(prefix + e.Line + Environment.NewLine);
+                AppendTextAndScroll(richTextBox1, prefix + e.Line + Environment.NewLine);
             }
         }
 
@@ -291,7 +535,7 @@ namespace mcserv
             {
                 // start ngrok tunnel to make server public
                 if (richTextBox1 != null)
-                    richTextBox1.AppendText($"[{si.Name}] <starting ngrok...>" + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox1, $"[{si.Name}] <starting ngrok...>" + Environment.NewLine);
                 await serverManager.StartNgrokTunnelAsync(si.Name);
             }
             catch (Exception ex)
@@ -308,7 +552,7 @@ namespace mcserv
             try
             {
                 if (richTextBox1 != null)
-                    richTextBox1.AppendText($"[{si.Name}] <stopping ngrok...>" + Environment.NewLine);
+                    AppendTextAndScroll(richTextBox1, $"[{si.Name}] <stopping ngrok...>" + Environment.NewLine);
                 await serverManager.StopNgrokTunnelAsync(si.Name);
             }
             catch (Exception ex)
@@ -358,6 +602,12 @@ namespace mcserv
         {
             ButtonStop_Click(sender, e);
             ButtonStopCF_Click(sender, e);
+        }
+
+        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            ButtonStopCF_Click(sender, e);
+            ButtonStop_Click(sender, e);
         }
     }
 }
