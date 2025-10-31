@@ -1,8 +1,15 @@
 # mcserv
 mcserv is a lightweight, no-nonsense Minecraft server manager built to make your life easier. Forget typing cryptic commands into terminals - mcserv gives you a clean, intuitive interface for starting, stopping, and configuring servers like a civilized human being.
 
-WARNING:
-Certain ISPs might block random TCP ports, resulting in the error "getsockopt".
+> ⚠️ **Warning**
+>
+> Some ISPs may block random TCP ports, which can cause errors such as:
+>
+> ```
+> getsockopt: connection timed out
+> ```
+>
+> If you encounter this issue, the best solution is to use a **VPS (Virtual Private Server)** — for example, the **Oracle Cloud Always Free Tier** — and route your connection through it.
 
 ## How It Works
 When you want your friends to join, mcserv uses **ngrok** to spin up a secure TCP tunnel straight to your local server. Basically, it makes your computer say, “hey world, I’m a Minecraft server now,” without exposing your entire network.
