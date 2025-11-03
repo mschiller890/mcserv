@@ -1,6 +1,15 @@
 # mcserv
 mcserv is a lightweight, no-nonsense Minecraft server manager built to make your life easier. Forget typing cryptic commands into terminals - mcserv gives you a clean, intuitive interface for starting, stopping, and configuring servers like a civilized human being.
 
+> [!IMPORTANT]
+> Some ISPs may block random TCP ports, causing errors such as:
+> 
+> ```
+> getsockopt: connection timed out
+> ```
+> 
+> To fix this, use a VPS (e.g. Oracle Cloud Always Free Tier) and route your connection through it.
+
 ## How It Works
 When you want your friends to join, mcserv uses **ngrok** to spin up a secure TCP tunnel straight to your local server. Basically, it makes your computer say, “hey world, I’m a Minecraft server now,” without exposing your entire network.
 
@@ -24,6 +33,15 @@ When you want your friends to join, mcserv uses **ngrok** to spin up a secure TC
 - Under **Runtime**, click **Start** to launch your server.  
 - Want friends to join? Hit **Start ngrok** under the **ngrok** section.  
 - Keep an eye on the **Server Console** and **ngrok Console** tabs for logs, errors, and the occasional “oh no” moment.
+
+> [!WARNING]  
+> Ngrok servers are often discovered by automated bots that scan public IP addresses and ports. This activity is common across the internet and doesn’t always indicate malicious intent - however, it can lead to unauthorized connection attempts.  
+>  
+> If your server runs in **online mode** and has a **whitelist** enabled, it is generally protected against unwanted access.  
+>  
+> Ngrok itself does **not** expose your private IP address, as it creates a secure tunnel to your local machine. However, the **public URL** provided by Ngrok can be found through automated scans. If that URL isn’t secured with whitelisting or authentication, it may attract unwanted traffic.  
+>  
+> **Recommendation:** Always enable whitelisting and review your server’s security configuration when using Ngrok or any public tunneling service.
 
 ---
 
