@@ -704,6 +704,11 @@ namespace mcserv
             si.ConsoleBuffer = (si.ConsoleBuffer ?? string.Empty) + line + Environment.NewLine;
             ServerOutput?.Invoke(this, new ServerOutputEventArgs { ServerId = si.Id, Line = line });
 
+            if (Application.OpenForms.Count > 0 && Application.OpenForms[0] is Form1 mainForm1)
+            {
+                mainForm1.SetStatus();
+            }
+
             if (line.Contains("[ServerMain/INFO]: You need to agree to the EULA in order to run the server."))
             {
                 // Find the main UI thread (Form) and invoke on it if needed
@@ -767,14 +772,16 @@ namespace mcserv
                         await dst.WriteAsync(buffer, 0, read);
                         totalRead += read;
 
+                        double totalReadMB = totalRead / (1024.0 * 1024.0);
                         if (total.HasValue)
                         {
+                            double totalMB = total.Value / (1024.0 * 1024.0);
                             var pct = (int)((totalRead * 100) / total.Value);
                             // throttle to 1% changes
                             if (pct != lastPct)
                             {
                                 lastPct = pct;
-                                OnOutput(si, $"<download {pct}% ({totalRead}/{total} bytes)>");
+                                OnOutput(si, $"<download {pct}% ({totalReadMB:F2}/{totalMB:F2} MB)>");
                             }
                         }
                         else
@@ -783,13 +790,14 @@ namespace mcserv
                             if ((DateTime.Now - lastReport).TotalMilliseconds > 250)
                             {
                                 lastReport = DateTime.Now;
-                                OnOutput(si, $"<download {totalRead} bytes written>");
+                                OnOutput(si, $"<download {totalReadMB:F2} MB written>");
                             }
                         }
                     }
                 }
             }
         }
+
 
         private static string MakeSafeName(string name)
         {
@@ -868,29 +876,29 @@ namespace mcserv
         [JsonIgnore]
         public bool IsRunning { get; set; }
 
-    [JsonIgnore]
-    public Process NgrokProcess { get; set; }
+        [JsonIgnore]
+        public Process NgrokProcess { get; set; }
 
-    [JsonIgnore]
-    public bool IsPortForwarded { get; set; }
+        [JsonIgnore]
+        public bool IsPortForwarded { get; set; }
 
-    [JsonIgnore]
-    public int PortForwardExternalPort { get; set; }
+        [JsonIgnore]
+        public int PortForwardExternalPort { get; set; }
 
-    [JsonIgnore]
-    public string PortForwardExternalIp { get; set; }
+        [JsonIgnore]
+        public string PortForwardExternalIp { get; set; }
 
-    [JsonIgnore]
-    public string PortMappingControlUrl { get; set; }
+        [JsonIgnore]
+        public string PortMappingControlUrl { get; set; }
 
-    [JsonIgnore]
-    public string PortMappingServiceType { get; set; }
+        [JsonIgnore]
+        public string PortMappingServiceType { get; set; }
 
-    [JsonIgnore]
-    public string LastNgrokPublicUrl { get; set; }
+        [JsonIgnore]
+        public string LastNgrokPublicUrl { get; set; }
 
-    [JsonIgnore]
-    public bool IsTunnelRunning { get; set; }
+        [JsonIgnore]
+        public bool IsTunnelRunning { get; set; }
 
         [JsonIgnore]
         public string ConsoleBuffer { get; set; }

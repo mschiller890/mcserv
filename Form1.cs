@@ -13,7 +13,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-// using Microsoft.VisualBasic; // not required when using a dedicated TextBox for token input
 
 namespace mcserv
 {
@@ -47,12 +46,13 @@ namespace mcserv
             this.button8.Click += ButtonConsoleSend_Click; // Console send
             this.button9.Click += ButtonDownloadCF_Click; // Console send
             this.button10.Click += ButtonAddToken_Click; // Add Token
-            //this.button11.Click += ButtonKillServerAndNgrok_Click; // Add Token
+            //this.button11.Click += ButtonKillServerAndNgrok_Click;
 
             SetCueBanner(this.textBox1, "Enter Server Name...");
             SetCueBanner(this.textBox3, "Enter server.jar URL...");
             SetCueBanner(this.textBox4, "Enter authtoken...");
             SetCueBanner(this.textBox2, "/help");
+            SetCueBanner(this.textBox5, "Console output...");
 
             this.listBox1.SelectedIndexChanged += ListBox1_SelectedIndexChanged;
             // allow pressing Enter in the console input to send the command
@@ -608,6 +608,25 @@ namespace mcserv
         {
             ButtonStopCF_Click(sender, e);
             ButtonStop_Click(sender, e);
+        }
+
+        public void SetStatus()
+        {
+            if (InvokeRequired)
+            {
+                BeginInvoke(new Action(() => SetStatus()));
+                return;
+            }
+
+            if (richTextBox1.Lines.Length >= 2)
+                textBox5.Text = richTextBox1.Lines[richTextBox1.Lines.Length - 2];
+            else
+                textBox5.Text = "";
+
+            if (richTextBox2.Lines.Length >= 2)
+                textBox6.Text = richTextBox2.Lines[richTextBox2.Lines.Length - 2];
+            else
+                textBox6.Text = "";
         }
     }
 }
