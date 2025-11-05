@@ -44,7 +44,7 @@ namespace mcserv
             this.button6.Click += ButtonStartCF_Click; // Start ngrok tunnel
             this.button7.Click += ButtonStopCF_Click; // Stop ngrok tunnel
             this.button8.Click += ButtonConsoleSend_Click; // Console send
-            this.button9.Click += ButtonDownloadCF_Click; // Console send
+            this.button9.Click += ButtonDownloadCF_Click; // Download ngrok
             this.button10.Click += ButtonAddToken_Click; // Add Token
             //this.button11.Click += ButtonKillServerAndNgrok_Click;
 
@@ -53,6 +53,8 @@ namespace mcserv
             SetCueBanner(this.textBox4, "Enter authtoken...");
             SetCueBanner(this.textBox2, "/help");
             SetCueBanner(this.textBox5, "Console output...");
+            SetCueBanner(this.richTextBox1, "Server output will show here...");
+            SetCueBanner(this.richTextBox2, "ngrok output will show here...");
 
             this.listBox1.SelectedIndexChanged += ListBox1_SelectedIndexChanged;
             // allow pressing Enter in the console input to send the command
@@ -71,6 +73,11 @@ namespace mcserv
         }
 
         private void SetCueBanner(TextBox box, string text)
+        {
+            SendMessage(box.Handle, EM_SETCUEBANNER, 0, text);
+        }
+
+        private void SetCueBanner(RichTextBox box, string text)
         {
             SendMessage(box.Handle, EM_SETCUEBANNER, 0, text);
         }
@@ -627,6 +634,34 @@ namespace mcserv
                 textBox6.Text = richTextBox2.Lines[richTextBox2.Lines.Length - 2];
             else
                 textBox6.Text = "";
+        }
+
+        private void button12_Click(object sender, EventArgs e)
+        {
+            int idx = listBox1.SelectedIndex;
+            if (idx < 0)
+            {
+                MessageBox.Show("Please select a server first.");
+                return;
+            }
+
+            var si = serverManager.Servers[idx];
+            var folder = si?.FolderPath;
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                MessageBox.Show("Server folder not found: " + (folder ?? "<unknown>"));
+                return;
+            }
+
+            try
+            {
+                // Open the server root folder in Explorer
+                Process.Start("explorer.exe", folder);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("Failed to open server folder: " + ex.Message);
+            }
         }
     }
 }
